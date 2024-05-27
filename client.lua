@@ -1,15 +1,83 @@
+-- ao değişkenini tanımlayın
+ao = {
+    id = "ao-id-example",
+    send = function(message)
+        -- Bu işlev, mesajları göndermek için kullanılır
+        print("Sending data: ")
+        for k, v in pairs(message) do
+            print(k .. ": " .. v)
+        end
+        -- Mesajın türüne göre işlem yapın
+        if message.Action == "Broadcast" then
+            print("Message from \"" .. message.Username .. "\": " .. message.Data)
+        elseif message.Action == "Register" then
+            print("Registering with nickname: " .. message.Nickname)
+        elseif message.Action == "Replay" then
+            print("Replaying last " .. message.Depth .. " messages")
+        elseif message.Action == "Unregister" then
+            print("Leaving room")
+        elseif message.Action == "Get-List" then
+            print("Getting room list")
+        elseif message.Action == "Transfer" then
+            print("Sending tip of " .. message.Quantity .. " to " .. message.Recipient)
+        else
+            print("Unknown action: " .. message.Action)
+        end
+    end
+}
+
+-- Handlers değişkenini tanımlayın ve başlatın
+Handlers = Handlers or {}
+
+-- Handler yardımcı işlevlerini ekleyin
+Handlers.utils = {
+    hasMatchingTag = function(tagKey, tagValue)
+        return function(message)
+            return message[tagKey] == tagValue
+        end
+    end
+}
+
+-- Örnek bir Handler ekleyin
+Handlers.add = function(action, condition, callback)
+    if not Handlers[action] then
+        Handlers[action] = {}
+    end
+    table.insert(Handlers[action], { condition = condition, callback = callback })
+end
+
+-- Say fonksiyonunu tanımlayın
+function Say(message, username)
+    if not message then
+        print("Error: No message provided.")
+        return
+    end
+    if not username then
+        print("Error: No username provided.")
+        return
+    end
+    local formattedMessage = "Message from \"" .. username .. "\": " .. message
+    print(formattedMessage) -- Bu satır terminale yazdırmak için eklendi
+    ao.send({
+        Action = "Broadcast",
+        Data = message,
+        Username = username
+    })
+end
+
+-- DevChat betiği burada başlar
 DevChat = {}
 
 DevChat.Colors = {
-    pink = "\27[38;5;206m",
-    lightGreen = "\27[38;5;120m",
-    lightBlue = "\27[38;5;111m",
+    red = "\27[31m",
+    green = "\27[32m",
+    blue = "\27[34m",
     reset = "\27[0m",
-    lightGray = "\27[38;5;246m"
+    gray = "\27[90m"
 }
 
-DevChat.Router = "j597QkvQeMuDyTArdVv9dFF7yIWZNVwWa7jHmQqwEbk" -- Bu process ID'yi değiştirin
-DevChat.InitRoom = "-5PaCcmaXJCRjC2B0NYo5PcuLiGgyRKYl1PQ9H8R7Kw" -- Bu process ID'yi değiştirin
+DevChat.Router = "j597QkvQeMuDyTArdVv9dFF7yIWZNVwWa7jHmQqwEbk"
+DevChat.InitRoom = "I6c7tto7uXzZROotNxb8F1m86ORv4DeG1PzqXoXfQ4U"
 DevChat.LastSend = DevChat.LastSend or DevChat.InitRoom
 
 DevChat.LastReceive = {
@@ -22,165 +90,75 @@ DevChat.Rooms = DevChat.Rooms or DevChat.InitRooms
 
 DevChat.Confirmations = DevChat.Confirmations or true
 
-DevChat.findRoom =
-    function(target)
-        for address, name in pairs(DevChat.Rooms) do
-            if target == name then
-                return address
-            end
+-- Helper function to go from roomName => address
+DevChat.findRoom = function(target)
+    for address, name in pairs(DevChat.Rooms) do
+        if target == name then
+            return address
         end
     end
+end
 
-DevChat.add =
-    function(...)
-        local arg = {...}
-        ao.send({
-            Target = DevChat.Router,
-            Action = "Register",
-            Name = arg[1] or Name,
-            Address = arg[2] or ao.id
-        })
+List = function()
+    ao.send({ Target = DevChat.Router, Action = "Get-List" })
+    return(DevChat.Colors.gray .. "Getting the room list from the DevChat index..." .. DevChat.Colors.reset)
+end
+
+Tip = function(...)
+    local arg = {...}
+    local room = arg[2] or DevChat.LastReceive.Room
+    local roomName = DevChat.Rooms[room] or room
+    local qty = tostring(arg[3] or 1)
+    local recipient = arg[1] or DevChat.LastReceive.Sender
+    ao.send({
+        Action = "Transfer",
+        Target = room,
+        Recipient = recipient,
+        Quantity = qty
+    })
+    return(DevChat.Colors.gray .. "Sent tip of " ..
+        DevChat.Colors.green .. qty .. DevChat.Colors.gray ..
+        " to " .. DevChat.Colors.red .. recipient .. DevChat.Colors.gray ..
+        " in room " .. DevChat.Colors.blue .. roomName .. DevChat.Colors.gray ..
+        "."
+    )
+end
+
+Replay = function(...)
+    local arg = {...}
+    local room = nil
+    if arg[2] then
+        room = DevChat.findRoom(arg[2]) or arg[2]
+    else
+        room = DevChat.LastReceive.Room
     end
+    local roomName = DevChat.Rooms[room] or room
+    local depth = arg[1] or 3
 
-List =
-    function()
-        ao.send({ Target = DevChat.Router, Action = "Get-List" })
-        return(DevChat.Colors.lightGray .. "Getting the room list from the DevChat index..." .. DevChat.Colors.reset)
-    end
+    ao.send({
+        Target = room,
+        Action = "Replay",
+        Depth = tostring(depth)
+    })
+    return(
+        DevChat.Colors.gray ..
+         "Requested replay of the last " ..
+        DevChat.Colors.green .. depth .. 
+        DevChat.Colors.gray .. " messages from " .. DevChat.Colors.blue ..
+        roomName .. DevChat.Colors.reset .. ".")
+end
 
-    Join =
-    function(id, ...)
-        local arg = {...}
-        local addr = DevChat.findRoom(id) or id
-        local nick = arg[1] or ao.id
-        ao.send({ Target = addr, Action = "Register", Nickname = nick })
-        print("Debug: Join requested with id: " .. id .. " and nickname: " .. nick)
-        return(
-            DevChat.Colors.lightGray ..
-             "Registering with room " ..
-            DevChat.Colors.lightBlue .. id .. 
-            DevChat.Colors.lightGray .. "..." .. DevChat.Colors.reset)
-    end
+Leave = function(id)
+    local addr = DevChat.findRoom(id) or id
+    ao.send({ Target = addr, Action = "Unregister" })
+    return(
+        DevChat.Colors.gray ..
+         "Leaving room " ..
+        DevChat.Colors.blue .. id ..
+        DevChat.Colors.gray .. "..." .. DevChat.Colors.reset)
+end
 
-    Say = function(text, ...)
-        local arg = {...}
-        local id = arg[1]
-        if id ~= nil then
-            DevChat.LastSend = DevChat.findRoom(id) or id
-        end
-        local name = DevChat.Rooms[DevChat.LastSend] or id
-        print("Debug: Preparing to send message: " .. text .. " to room: " .. name)
-        ao.send({ Target = DevChat.LastSend, Action = "Broadcast", Data = text })
-        print("Debug: Message sent with text: " .. text .. " to room: " .. name)
-        if DevChat.Confirmations then
-            return(DevChat.Colors.lightGray .. "Broadcasting to " .. DevChat.Colors.lightBlue ..
-                name .. DevChat.Colors.lightGray .. "..." .. DevChat.Colors.reset)
-        else
-            return ""
-        end
-    end
-    
-
-    function Broadcast(from, data, type)
-        print("Broadcasting " .. type .. " message from " .. from .. ". Content:\n" .. data)
-        local lastUsers = {}
-        for i = #Messages - 100, #Messages, 1 do
-            lastUsers[Messages[i].From] = 1 
-        end
-        for user, _ in pairs(lastUsers) do
-            DispatchMessage(user, from, data, type)
-        end
-        table.insert(Messages, { From = from, Type = type, Data = data })
-        print("Message broadcasted successfully from: " .. from .. " with content: " .. data)
-    end
-
-
-Tip =
-    function(...) -- Recipient, Target, Qty
-        local arg = {...}
-        local room = arg[2] or DevChat.LastReceive.Room
-        local roomName = DevChat.Rooms[room] or room
-        local qty = tostring(arg[3] or 1)
-        local recipient = arg[1] or DevChat.LastReceive.Sender
-        ao.send({
-            Action = "Transfer",
-            Target = room,
-            Recipient = recipient,
-            Quantity = qty
-        })
-        return(DevChat.Colors.lightGray .. "Sent tip of " ..
-            DevChat.Colors.lightGreen .. qty .. DevChat.Colors.lightGray ..
-            " to " .. DevChat.Colors.pink .. recipient .. DevChat.Colors.lightGray ..
-            " in room " .. DevChat.Colors.lightBlue .. roomName .. DevChat.Colors.lightGray ..
-            "."
-        )
-    end
-
-Replay =
-    function(...) -- depth, room
-        local arg = {...}
-        local room = nil
-        if arg[2] then
-            room = DevChat.findRoom(arg[2]) or arg[2]
-        else
-            room = DevChat.LastReceive.Room
-        end
-        local roomName = DevChat.Rooms[room] or room
-        local depth = arg[1] or 3
-
-        ao.send({
-            Target = room,
-            Action = "Replay",
-            Depth = tostring(depth)
-        })
-        return(
-            DevChat.Colors.lightGray ..
-             "Requested replay of the last " ..
-            DevChat.Colors.lightGreen .. depth .. 
-            DevChat.Colors.lightGray .. " messages from " .. DevChat.Colors.lightBlue ..
-            roomName .. DevChat.Colors.reset .. ".")
-    end
-
-Leave =
-    function(id)
-        local addr = DevChat.findRoom(id) or id
-        ao.send({ Target = addr, Action = "Unregister" })
-        print("Debug: Leave requested with id: " .. id)
-        return(
-            DevChat.Colors.lightGray ..
-             "Leaving room " ..
-            DevChat.Colors.lightBlue .. id ..
-            DevChat.Colors.lightGray .. "..." .. DevChat.Colors.reset)
-    end
-
--- Handlers tablosunu tanımlayın ve eklemeler yapın
-Handlers = {
-    utils = {
-        hasMatchingTag = function(tag, value)
-            return function(m)
-                return m[tag] == value
-            end
-        end
-    },
-    add = function(action, condition, func)
-        -- Bu örnek, Handlers tablosuna bir işleyici ekler
-        -- Gerçek implementasyonunuzda bu işlevi değiştirin
-        print("Handler added for action: " .. action)
-    end
-}
-
-ao = {
-    send = function(data)
-        -- ao modülünün gönderim işlevi örnek olarak tanımlandı
-        -- Gerçek implementasyonunuzda bu işlevi değiştirin
-        print("Sending data: ")
-        for k, v in pairs(data) do
-            print(k .. ": " .. tostring(v))
-        end
-    end,
-    id = "ao-id-example" -- Örnek olarak ao id
-}
-
+-- Handler'ları ekleyin
 Handlers.add(
     "DevChat-Broadcasted",
     Handlers.utils.hasMatchingTag("Action", "Broadcasted"),
@@ -188,21 +166,20 @@ Handlers.add(
         local shortRoom = DevChat.Rooms[m.From] or string.sub(m.From, 1, 6)
         if m.Broadcaster == ao.id then
             if DevChat.Confirmations == true then
-                print(
-                    DevChat.Colors.lightGray .. "[Received confirmation of your broadcast in "
-                    .. DevChat.Colors.lightBlue .. shortRoom .. DevChat.Colors.lightGray .. ".]"
-                    .. DevChat.Colors.reset)
+                io.write(
+                    DevChat.Colors.gray .. "[Received confirmation of your broadcast in "
+                    .. DevChat.Colors.blue .. shortRoom .. DevChat.Colors.gray .. ".]"
+                    .. DevChat.Colors.reset .. "\n")
             end
         else
             local nick = string.sub(m.Nickname, 1, 10)
             if m.Broadcaster ~= m.Nickname then
-                nick = nick .. DevChat.Colors.lightGray .. "#" .. string.sub(m.Broadcaster, 1, 3)
+                nick = nick .. DevChat.Colors.gray .. "#" .. string.sub(m.Broadcaster, 1, 3)
             end
-            print(
-                "[" .. DevChat.Colors.pink .. nick .. DevChat.Colors.reset
-                .. "@" .. DevChat.Colors.lightBlue .. shortRoom .. DevChat.Colors.reset
-                .. "]> " .. DevChat.Colors.lightGreen .. m.Data .. DevChat.Colors.reset
-            )
+            io.write(
+                "[" .. DevChat.Colors.red .. nick .. DevChat.Colors.reset
+                .. "@" .. DevChat.Colors.blue .. shortRoom .. DevChat.Colors.reset
+                .. "]> " .. DevChat.Colors.green .. m.Data .. DevChat.Colors.reset .. "\n")
 
             DevChat.LastReceive.Room = m.From
             DevChat.LastReceive.Sender = m.Broadcaster
@@ -230,32 +207,28 @@ Handlers.add(
             local address = m.TagArray[i].value
 
             if tagPrefix == filterPrefix then
-                rows = rows .. DevChat.Colors.lightBlue .. "        " .. name .. DevChat.Colors.reset .. "\n"
+                rows = rows .. DevChat.Colors.blue .. "        " .. name .. DevChat.Colors.reset .. "\n"
                 DevChat.Rooms[address] = name
             end
         end
 
-        print(
-            intro .. rows .. "\nJoin a chat by running `Join(\"chatName\"[, \"yourNickname\"])`! You can leave chats with `Leave(\"name\")`."
-        )
+        io.write(
+            intro .. rows .. "\nJoin a chat by running `Join(\"chatName\"[, \"yourNickname\"])`! You can leave chats with `Leave(\"name\")`.\n")
     end
 )
 
-
 if DevChatRegistered == nil then
     DevChatRegistered = true
-    Join(DevChat.InitRoom)
 end
 
 return(
-    DevChat.Colors.lightBlue .. "\n\nWelcome to ao DevChat v0.1!\n\n" .. DevChat.Colors.reset ..
+    DevChat.Colors.blue .. "\n\nWelcome to ao DevChat v0.1!\n\n" .. DevChat.Colors.reset ..
     "DevChat is a simple service that helps the ao community communicate as we build our new computer.\n" ..
     "The interface is simple. Run...\n\n" ..
-    DevChat.Colors.lightGreen .. "\t\t`List()`" .. DevChat.Colors.reset .. " to see which rooms are available.\n" .. 
-    DevChat.Colors.lightGreen .. "\t\t`Join(\"RoomName\")`" .. DevChat.Colors.reset .. " to join a room.\n" .. 
-    DevChat.Colors.lightGreen .. "\t\t`Say(\"Msg\"[, \"RoomName\"])`" .. DevChat.Colors.reset .. " to post to a room (remembering your last choice for next time).\n" ..
-    DevChat.Colors.lightGreen .. "\t\t`Replay([\"Count\"])`" .. DevChat.Colors.reset .. " to reprint the most recent messages from a chat.\n" ..
-    DevChat.Colors.lightGreen .. "\t\t`Leave(\"RoomName\")`" .. DevChat.Colors.reset .. " at any time to unsubscribe from a chat.\n" ..
-    DevChat.Colors.lightGreen .. "\t\t`Tip([\"Recipient\"])`" .. DevChat.Colors.reset .. " to send a token from the chatroom to the sender of the last message.\n\n" ..
-    "You have already been registered to the " .. DevChat.Colors.lightBlue .. DevChat.Rooms[DevChat.InitRoom] .. DevChat.Colors.reset .. ".\n" ..
-    "Have fun, be respectful, and remember: Cypherpunks ship code! 🫡")
+    DevChat.Colors.green .. "\t\t`List()`" .. DevChat.Colors.reset .. " to see which rooms are available.\n" .. 
+    DevChat.Colors.green .. "\t\t`Join(\"RoomName\")`" .. DevChat.Colors.reset .. " to join a room.\n" .. 
+    DevChat.Colors.green .. "\t\t`Say(\"Msg\"[, \"RoomName\"])`" .. DevChat.Colors.reset .. " to post to a room (remembering your last choice for next time).\n" ..
+    DevChat.Colors.green .. "\t\t`Replay([\"Count\"])`" .. DevChat.Colors.reset .. " to reprint the most recent messages from a chat.\n" ..
+    DevChat.Colors.green .. "\t\t`Leave(\"RoomName\")`" .. DevChat.Colors.reset .. " at any time to unsubscribe from a chat.\n" ..
+    DevChat.Colors.green .. "\t\t`Tip([\"Recipient\"])`" .. DevChat.Colors.reset .. " to send a token from the chatroom to the sender of the last message.\n\n" ..
+    "Have fun, be respectful, and remember: Cypherpunks ship code! 🫡\n")
