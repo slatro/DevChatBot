@@ -32,14 +32,14 @@ function Broadcast(from, data, type)
 end
 
 Handlers.add(
-    "Register",
-    Handlers.utils.hasMatchingTag("Action", "Register"),
+    "Join",
+    Handlers.utils.hasMatchingTag("Action", "Join"),
     function(m)
         print("Registering: " .. m.From .. ". Nick: " .. m.Nickname)
         Users[m.From] = m.Nickname
         ao.send({
             Target = m.From,
-            Action = "Registered"
+            Action = "Joined"
         })
     end
 )
