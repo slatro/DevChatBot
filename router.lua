@@ -28,15 +28,15 @@ ao = ao or {
 }
 
 Handlers.add(
-    "Register",
-    Handlers.utils.hasMatchingTag("Action", "Register"),
+    "Join",
+    Handlers.utils.hasMatchingTag("Action", "Join"),
     function(m)
         print("Adding room '" .. m.Name .. "'. Added by: " .. m.From)
         local address = m.Address or m.From
         table.insert(Rooms, { Address = address, Name = m.Name, AddedBy = m.From })
         ao.send({
             Target = m.From,
-            Action = "Registered"
+            Action = "Joined"
         })
     end
 )
