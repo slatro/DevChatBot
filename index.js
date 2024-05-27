@@ -27,7 +27,7 @@ client.once('ready', () => {
         if (error) {
             console.error(`Error: ${stderr}`);
         } else {
-            console.log(`Joined: ${stdout}`);
+            console.log('Welcome to DevChat!');
         }
     });
 });
@@ -63,7 +63,6 @@ client.on('messageCreate', message => {
                         console.log(formattedMessage); // Terminale yazdır
                     }
                 });
-                message.channel.send(`Message from "${username}": ${text}`);
                 break;
             case 'leave':
                 message.channel.send('Leaving DevChat room...');
