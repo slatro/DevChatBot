@@ -87,8 +87,8 @@ DevChat.getColorForUsername = function(username)
     return colors[(sum % #colors) + 1]
 end
 
-DevChat.Router = "Vm_gxd6H_Fp09RkX1CAItb1fya_e4qdCJycwK-2kE1Y"
-DevChat.InitRoom = "I6c7tto7uXzZROotNxb8F1m86ORv4DeG1PzqXoXfQ4U"
+DevChat.Router = "xnkv_QpWqICyt8NpVMbfsUQciZ4wlm5DigLrfXRm8fY"
+DevChat.InitRoom = "isImEFj7zii8ALzRirQ2nqUUXecCkdFSh10xB_hbBJ0"
 DevChat.LastSend = DevChat.LastSend or DevChat.InitRoom
 
 DevChat.LastReceive = {
