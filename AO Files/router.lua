@@ -9,22 +9,20 @@ Handlers = Handlers or {
         end
     },
     add = function(action, condition, func)
-        -- Bu örnek, Handlers tablosuna bir işleyici ekler
-        -- Gerçek implementasyonunuzda bu işlevi değiştirin
+
         print("Handler added for action: " .. action)
     end
 }
 
 ao = ao or {
     send = function(data)
-        -- ao modülünün gönderim işlevi örnek olarak tanımlandı
-        -- Gerçek implementasyonunuzda bu işlevi değiştirin
+
         print("Sending data: ")
         for k, v in pairs(data) do
             print(k .. ": " .. tostring(v))
         end
     end,
-    id = "ao-id-example" -- Örnek olarak ao id
+    id = "ao-id-example"
 }
 
 Handlers.add(
