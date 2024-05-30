@@ -19,8 +19,7 @@ function DispatchMessage(to, from, data, type)
 end
 
 function Broadcast(from, data, type)
-    print("Broadcasting " .. type .. " message from "
-        .. from .. ". Content:\n" .. data)
+    print("Broadcasting " .. type .. " message from " .. from .. ". Content:\n" .. data)
     local lastUsers = {}
     for i = #Messages - 100, #Messages, 1 do
        lastUsers[Messages[i].From] = 1 
