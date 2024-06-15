@@ -14,5 +14,5 @@ Say("Hey AO fam!", "SlatroChat1")
 
 Note: Keep secret to your Discord Bot token an ID.
 
-Discord channel: https://discord.gg/z8DMaB88
+Discord channel: https://discord.gg/Y9FCkAJC
 
