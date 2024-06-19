@@ -1,67 +1,101 @@
 const { results } = require('@permaweb/aoconnect');
 const WebSocket = require('ws');
 
-// WebSocket bağlantısını başlatma
-const wsServerUrl = 'ws://localhost:8080';
-const websocket = new WebSocket(wsServerUrl);
+// Initiate Websocket connection
 
-let lastCursor = '';
+let cursor = '';
+const ws = new WebSocket('ws://localhost:8080');
 
-websocket.on('open', () => {
-  console.log('WebSocket bağlantısı başarıyla açıldı.');
+let sentMessages = new Set();
+const MESSAGE_EXPIRATION_TIME = 1000; // 1 saniye
+
+ws.on('open', () => {
+  console.log('WebSocket connection opened');
 });
 
-websocket.on('error', (err) => {
-  console.error('WebSocket Bağlantı Hatası:', err);
+ws.on('error', (error) => {
+  console.error('WebSocket Error:', error);
 });
 
-async function monitorDevChat() {
+async function DevChatCheking() {
   try {
-    if (!lastCursor) {
-      const initialData = await results({
-        process: 'IVsB6cwDL-2CgUxWgMcj-JXOhytSsH9a6poylDutLFU',
+    if (cursor === '') {
+      const resultsOut = await results({
+        process: '6I1JBBc9SOMtqFxlX7OoYgsMh7QeZk2fFwUCHTUqshg',
         sort: 'DESC',
         limit: 1,
       });
-      lastCursor = initialData.edges[0]?.cursor || '';
-      console.log('Başlangıç verileri:', initialData);
+      cursor = resultsOut.edges[0].cursor;
+      console.log('Last Results', resultsOut);
     }
 
-    console.log('DevChat mesajlarını kontrol etme işlemi başlatılıyor...');
-    const fetchedMessages = await results({
-      process: 'IVsB6cwDL-2CgUxWgMcj-JXOhytSsH9a6poylDutLFU',
-      from: lastCursor,
+    console.log('DevChatCheck');
+    const resultsOut2 = await results({
+      process: '6I1JBBc9SOMtqFxlX7OoYgsMh7QeZk2fFwUCHTUqshg',
+      from: cursor,
       sort: 'ASC',
       limit: 50,
     });
 
-    for (const edge of fetchedMessages.edges.reverse()) {
-      lastCursor = edge.cursor;
-      console.log('Alınan yeni mesajlar:', edge.node.Messages);
+    for (const element of resultsOut2.edges.reverse()) {
+      cursor = element.cursor;
+      console.log('Element Data:', JSON.stringify(element.node, null, 2));
 
-      for (const msg of edge.node.Messages) {
-        console.log('Mesaj Etiketleri:', msg.Tags);
-      }
+      const messagesData = element.node.Messages.filter(e => {
+        return e.Tags && e.Tags.length > 0 && e.Tags.some(f => f.name === 'Action' && f.value === 'Broadcasted');
+      });
+      console.log('Filtered Message Data:', messagesData);
 
-      const filteredMessages = edge.node.Messages.filter(msg => 
-        msg.Tags.some(tag => tag.name === 'Action' && tag.value === 'Say')
-      );
-      console.log('Filtrelenmiş Mesajlar:', filteredMessages);
+      for (const messagesItem of messagesData) {
+        const content = messagesItem.Data || 'No content';
+        const nicknameTag = messagesItem.Tags.find(tag => tag.name === 'Nickname');
+        const nickname = nicknameTag ? nicknameTag.value : 'Unknown';
 
-      for (const filteredMsg of filteredMessages) {
-        const eventTag = filteredMsg.Tags.find(tag => tag.name === 'Event')?.value || 'SlatroChat1\'de Yeni Mesaj';
-        const messageToSend = `${eventTag} : ${filteredMsg.Data}`;
-        console.log('Gönderilecek Mesaj:', messageToSend);
-        websocket.send(messageToSend);
+        const formattedNickname = `${nickname.substring(0, 5)}***${nickname.substring(nickname.length - 5)}`;
+
+      
+        if (nickname === '_TvvXcFb4RWIPUg03g_8jfTjgNyQMpKt6wMcEBEaByE') {
+          console.log(`Mesaj gönderilmiyor: ${content} - Nickname: ${nickname}`);
+          continue;
+        }
+
+        if (!sentMessages.has(content)) {
+          const discordMessage = `USER_FROM_AOS, [${formattedNickname}] >>>> ${content}`;
+          console.log('Yakalanan Mesaj:', content);
+          // Sedn to Discord
+          await sendToDiscord(discordMessage);
+
+
+          sentMessages.add(content);
+          // Remove the message from the set after a certain time
+          setTimeout(() => {
+            sentMessages.delete(content);
+          }, MESSAGE_EXPIRATION_TIME);
+        }
       }
     }
-
   } catch (error) {
-    console.error('DevChat kontrolü sırasında hata oluştu:', error);
-    console.error('Hata Detayları:', error.message);
+    console.error('DevChatCheck Error:', error);
   } finally {
-    setTimeout(monitorDevChat, 5000);
+    setTimeout(DevChatCheking, 5000);
   }
 }
 
-monitorDevChat();
+async function sendToDiscord(content) {
+  const ws = new WebSocket('ws://localhost:8080');
+
+  ws.on('open', () => {
+    ws.send(content);
+    console.log(`Mesaj Discord'a gönderildi: ${content}`);
+  });
+
+  ws.on('error', (error) => {
+    console.error('WebSocket hatasý:', error);
+  });
+
+  ws.on('close', () => {
+    console.log('WebSocket baðlantýsý kapandý');
+  });
+}
+
+DevChatCheking();
