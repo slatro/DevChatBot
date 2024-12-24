@@ -1,4 +1,4 @@
-AO Commands List
+AO Commands List:
 
 1. Register
 
